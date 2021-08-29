@@ -126,29 +126,88 @@ class Directory:
 
     @classmethod
     def populate_from_records(
-        cls, absolute_path: Text, sizes_file: Text, hashes_file: Text
+        cls, absolute_path: Text, hashes_file: Text, sizes_file: Text
     ) -> "Directory":
         dir_name = path.dirname(absolute_path)
         root_dir = Directory(dir_name, absolute_path, [], [])
         current_dir = root_dir
 
         hashes = {}  # Dict[Text, int]
-        with open(hashes_file) as file_in:
-            for line in file_in:
-                hex_digest, _, file_path = line.strip().partition(" ")
+        with open(hashes_file, errors="replace") as file_in:
+            for line_no, line in enumerate(file_in, 1):
+                hex_digest, _, file_path = (
+                    line.strip().replace("\t", " ").partition(" ")
+                )
                 norm_path = path.normpath(file_path)
-                hashes[norm_path] = int(hex_digest, 16)
+                try:
+                    assert len(hex_digest) == 32, "Invalid hash"
+                    hashes[norm_path] = int(hex_digest, 16)
+                except:
+                    sys.stderr.write(
+                        "Failure on line {} ({}): {}/{}\n".format(
+                            line_no, line, hex_digest, norm_path
+                        )
+                    )
+                    continue
 
-        with open(sizes_file) as file_in:
-            for line in file_in:
-                size_str, _, file_path = line.strip().partition(" ")
+        with open(sizes_file, errors="replace") as file_in:
+            for line_no, line in enumerate(file_in, 1):
+                size_str, _, file_path = line.strip().replace("\t", " ").partition(" ")
                 norm_path = path.normpath(file_path)
-                assert norm_path in hashes, "Hash missing for file " + norm_path
+
+                try:
+                    size = int(size_str)
+                except:
+                    sys.stderr.write(
+                        "Failure on line {} ({}): {}/{}\n".format(
+                            line_no, line, size_str, norm_path
+                        )
+                    )
+                    continue
+                if not norm_path in hashes:
+                    sys.stderr.write("Hash missing for file {}\n".format(norm_path))
+                    continue
+
+                dir_path, filename = path.split(norm_path)
+                file = File(filename, norm_path, size)
+                file.md5_hash_cache = hashes[norm_path]
+                if path.normpath(dir_path) != current_dir.absolute_path:
+                    current_dir = root_dir.recursive_make(dir_path)
+                current_dir.files.append(file)
+                file.parent_dir = current_dir
+
+        return root_dir
+
+    @classmethod
+    def populate_from_hashes(
+        cls, absolute_path: Text, hashes_file: Text
+    ) -> "Directory":
+        dir_name = path.dirname(absolute_path)
+        root_dir = Directory(dir_name, absolute_path, [], [])
+        current_dir = root_dir
+
+        with open(hashes_file, errors="replace") as file_in:
+            for line_no, line in enumerate(file_in, 1):
+                sys.stderr.write("Reading line {}\r".format(line_no))
+
+                hex_digest, _, file_path = (
+                    line.strip().replace("\t", " ").partition(" ")
+                )
+                norm_path = path.normpath(file_path)
+                try:
+                    assert len(hex_digest) == 32, "Invalid hash"
+                    hash = int(hex_digest, 16)
+                except:
+                    sys.stderr.write(
+                        "Failure on line {} ({}): {}/{}\n".format(
+                            line_no, line, hex_digest, norm_path
+                        )
+                    )
+                    continue
 
                 dir_path, filename = path.split(norm_path)
                 file = File(filename, norm_path, 0)
-                file.size = int(size_str)
-                file.md5_hash_cache = hashes[norm_path]
+                file.md5_hash_cache = hash
                 if path.normpath(dir_path) != current_dir.absolute_path:
                     current_dir = root_dir.recursive_make(dir_path)
                 current_dir.files.append(file)
@@ -203,12 +262,14 @@ class Directory:
 
 
 def file_dupes(
-    root_path: Text, sizes_file: Optional[Text], hashes_file: Optional[Text]
+    root_path: Text, hashes_file: Optional[Text], sizes_file: Optional[Text]
 ) -> None:
     absolute_path = path.abspath(root_path)
 
-    if sizes_file and hashes_file:
-        root_dir = Directory.populate_from_records(root_path, sizes_file, hashes_file)
+    if hashes_file and sizes_file:
+        root_dir = Directory.populate_from_records(root_path, hashes_file, sizes_file)
+    elif hashes_file:
+        root_dir = Directory.populate_from_hashes(root_path, hashes_file)
     else:
         root_dir = Directory.populate(absolute_path)
 
@@ -224,6 +285,9 @@ def file_dupes(
             continue
         for file in files:
             files_by_hash[file.md5_hash].append(file)
+
+    # Release some memory
+    files_by_size.clear()
 
     # Find duplicate files
     dirs_with_dupes = dict()  # type: Dict[Text, Directory]
@@ -244,17 +308,22 @@ def file_dupes(
             key = (file.size, file.md5_hash)
             duplicates_by_size_and_hash[key].append(file)
 
-    # Print duplicate files in order by size
-    print("------ FILES ------")
-    dupe_keys = sorted(duplicates_by_size_and_hash, reverse=True)
-    for key in dupe_keys:
-        size, hash = key
-        files = duplicates_by_size_and_hash[key]
-        print(
-            "{} bytes ({}): \n{}\n".format(
-                size, hash, ", ".join([file.absolute_path for file in files])
+    # Release some memory
+    files_by_hash.clear()
+
+    # Print duplicate files in order by size, but skip if we don't
+    # know anything about sizes, because it is useless that way
+    if not (hashes_file and not sizes_file):
+        print("------ FILES ------")
+        dupe_keys = sorted(duplicates_by_size_and_hash, reverse=True)
+        for key in dupe_keys:
+            size, hash = key
+            files = duplicates_by_size_and_hash[key]
+            print(
+                "{} bytes ({}): \n{}\n".format(
+                    size, hash, ", ".join([file.absolute_path for file in files])
+                )
             )
-        )
 
     # Print entirely duplicated directories
     print("--- DIRECTORIES ---")
@@ -263,36 +332,38 @@ def file_dupes(
         if directory.is_entirely_duplicated and (
             not directory.parent_dir or not directory.parent_dir.is_entirely_duplicated
         ):
-            total_size = sum([f.size for f in directory.get_files_recursive()])
+            if hashes_file and not sizes_file:
+                total_size = len(list(directory.get_files_recursive()))
+            else:
+                total_size = sum([f.size for f in directory.get_files_recursive()])
             directories_and_sizes.append((total_size, directory))
     for total_size, directory in sorted(directories_and_sizes, reverse=True):
-        if total_size:
-            print(
-                "{} entirely duplicated ({} bytes)".format(
-                    directory.absolute_path, total_size
-                )
-            )
-        else:
+        if hashes_file and not sizes_file:
             num_files = len(list(directory.get_files_recursive()))
             print(
                 "{} entirely duplicated ({} files)".format(
                     directory.absolute_path, num_files
                 )
             )
+        else:
+            print(
+                "{} entirely duplicated ({} bytes)".format(
+                    directory.absolute_path, total_size
+                )
+            )
 
 
 if __name__ == "__main__":
-    assert len(sys.argv) in (
-        2,
-        4,
-    ), "Usage: dupe-finder.py <top-level dir> <sizes file> <hashes file>"
-    # Sizes `file: find / -type f -exec du -b {} \; > sizes_file.txt `
+    usage = "Usage: dupe-finder.py <top-level dir> <hashes file> <sizes file>"
+    assert len(sys.argv) in (2, 3, 4), usage
     # Hashes file: `file: find / -type f -exec md5sum {} \; > hashes_file.txt `
+    # Sizes file:  `file: find / -type f -exec du -b {} \; > sizes_file.txt `
     root_dir = sys.argv[1]
 
     hashes_file = sizes_file = None
-    if len(sys.argv) == 4:
-        sizes_file = sys.argv[2]
-        hashes_file = sys.argv[3]
+    if len(sys.argv) >= 3:
+        hashes_file = sys.argv[2]
+    if len(sys.argv) >= 4:
+        sizes_file = sys.argv[3]
 
-    file_dupes(root_dir, sizes_file, hashes_file)
+    file_dupes(root_dir, hashes_file, sizes_file)
