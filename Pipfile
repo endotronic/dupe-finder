@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 attrs = "*"
 "hurry.filesize" = "*"
+unidecode = "*"
 
 [dev-packages]
 mypy = "*"

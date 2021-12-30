@@ -1,6 +1,9 @@
 import argparse
+import base64
 import hashlib
 import os
+import stat
+from time import time
 
 from hurry.filesize import size as size_str
 
@@ -24,6 +27,12 @@ if __name__ == "__main__":
     parser.add_argument("directory", help="root directory for searching")
     parser.add_argument("-z", "--hashes_file", help="hashes file path")
     parser.add_argument("-s", "--sizes_file", help="sizes file path")
+    parser.add_argument(
+        "-r",
+        "--rewrite",
+        help="rewrite output files instead of appending",
+        action="store_true",
+    )
     args = parser.parse_args()
 
     dirname = os.path.basename(args.directory)
@@ -48,6 +57,7 @@ if __name__ == "__main__":
 
     files_count = 0
     symlinks_count = 0
+    others_count = 0
     total_size = 0
 
     hashes_file = os.path.abspath(hashes_file)
@@ -58,49 +68,138 @@ if __name__ == "__main__":
 
     spaces = "".join([" " for _ in range(48)])
 
-    with open(hashes_file, "w", encoding="utf-8") as hashes_file_handle, open(
-        sizes_file, "w", encoding="utf-8"
+    known_hashes_dict = dict()
+    if os.path.exists(hashes_file):
+        print("Reading existing hashes file...")
+        with open(hashes_file, "r", encoding="utf-8") as hashes_file_handle:
+            while True:
+                line = hashes_file_handle.readline()
+                if not line:
+                    break
+
+                parts = line.split("  ")
+                if len(parts) >= 3 and len(parts[0]) == 32:
+                    b64path = parts[2]
+                    known_hashes_dict[b64path] = parts[0]
+
+    known_sizes_dict = dict()
+    if os.path.exists(sizes_file):
+        print("Reading existing sizes file...")
+        with open(sizes_file, "r", encoding="utf-8") as sizes_file_handle:
+            while True:
+                line = sizes_file_handle.readline()
+                if not line:
+                    break
+
+                parts = line.split("  ")
+                if len(parts) >= 3:
+                    try:
+                        b64path = parts[2]
+                        known_sizes_dict[b64path] = int(parts[0])
+                    except:
+                        pass
+
+    hashes_file_mode = "a" if len(known_hashes_dict) and not args.rewrite else "w"
+    sizes_file_mode = "a" if len(known_sizes_dict) and not args.rewrite else "w"
+
+    last_output = 0
+    with open(
+        hashes_file, hashes_file_mode, encoding="utf-8"
+    ) as hashes_file_handle, open(
+        sizes_file, sizes_file_mode, encoding="utf-8"
     ) as sizes_file_handle:
-        for root, dirs, files in os.walk(args.directory, onerror=on_error):
-            for name in files:
-                path = os.path.join(root, name)
-                if os.path.islink(path):
+        print("Walking filesystem...")
+        for root_bytes, dirs_bytes, files_bytes in os.walk(
+            str(args.directory).encode("utf-8"), onerror=on_error
+        ):
+            for name_bytes in files_bytes:
+                path_bytes = os.path.join(root_bytes, name_bytes)
+                if os.path.islink(path_bytes):
                     symlinks_count += 1
                     continue
 
+                st_mode = os.stat(path_bytes).st_mode
+                if (
+                    stat.S_ISBLK(st_mode)
+                    or stat.S_ISCHR(st_mode)
+                    or stat.S_ISFIFO(st_mode)
+                    or stat.S_ISSOCK(st_mode)
+                ):
+                    others_count += 1
+                    continue
+
                 files_count += 1
+                fixed_path = path_bytes.decode("utf-8", errors="replace")
+                b64path = base64.b64encode(path_bytes).decode("utf-8")
 
                 try:
-                    size = os.path.getsize(path)
+                    path_bytes.decode("utf-8", errors="strict")
+                    is_utf8 = "utf-8"
+                except:
+                    is_utf8 = "unknown-encoding"
+
+                try:
+                    size = os.path.getsize(path_bytes)
+                    write_to_sizes_file = args.rewrite
+                    hash_needs_refresh = True
+                    if b64path in known_sizes_dict:
+                        if known_sizes_dict[b64path] == size:
+                            hash_needs_refresh = False
+                        else:
+                            write_to_sizes_file = True
+                        del known_sizes_dict[b64path]
+                    else:
+                        write_to_sizes_file = True
+
                     total_size += size
-                    sizes_file_handle.write("{}  {}\n".format(size, path))
+                    if write_to_sizes_file:
+                        sizes_file_handle.write(
+                            "{}  {}  {}\n".format(size, is_utf8, b64path, fixed_path)
+                        )
 
-                    with open(path, "rb") as f:
-                        size_read = 0
-                        hasher = hashlib.md5()
-                        while True:
-                            buf = f.read(CHUNK_SIZE)
-                            size_read += len(buf)
-                            if not buf:
-                                break
-                            if size_read < size:
-                                display_filename = path
-                                if len(display_filename) > 30:
-                                    display_filename = "..." + path[len(path) - 27 :]
+                    write_to_hashes_file = args.rewrite
+                    if b64path in known_hashes_dict and not hash_needs_refresh:
+                        hash = known_hashes_dict[b64path]
+                        del known_hashes_dict[b64path]
+                    else:
+                        write_to_hashes_file = True
+                        with open(path_bytes, "rb") as f:
+                            size_read = 0
+                            hasher = hashlib.md5()
+                            while True:
+                                try:
+                                    buf = f.read(CHUNK_SIZE)
+                                except KeyboardInterrupt:
+                                    print("Stopped on " + fixed_path)
+                                    raise
 
-                                progress = "Reading {} ({}%). Completed {} in {} files with {} errors...\r".format(
-                                    display_filename,
-                                    int(100 * size_read / size),
-                                    size_str(total_size),
-                                    files_count,
-                                    errors_count,
-                                )
-                                print(progress, end="")
+                                size_read += len(buf)
+                                if not buf:
+                                    break
+                                if size_read < size:
+                                    display_filename = fixed_path
+                                    if len(display_filename) > 30:
+                                        display_filename = (
+                                            "..." + fixed_path[len(fixed_path) - 27 :]
+                                        )
 
-                            hasher.update(buf)
+                                    progress = "Reading {} ({}%). Completed {} in {} files with {} errors...\r".format(
+                                        display_filename,
+                                        int(100 * size_read / size),
+                                        size_str(total_size),
+                                        files_count,
+                                        errors_count,
+                                    )
+                                    print(progress, end="")
 
-                        hash = hasher.hexdigest()
-                        hashes_file_handle.write("{}  {}\n".format(hash, path))
+                                hasher.update(buf)
+
+                            hash = hasher.hexdigest()
+
+                    if write_to_hashes_file:
+                        hashes_file_handle.write(
+                            "{}  {}  {}\n".format(hash, is_utf8, b64path)
+                        )
 
                 except Exception as error:
                     errors_count += 1
@@ -109,15 +208,19 @@ if __name__ == "__main__":
                     except:
                         print(error)
 
-            progress = "Working: {} in {} files with {} errors...{}\r".format(
-                size_str(total_size),
-                files_count,
-                errors_count,
-                spaces,
-            )
-            print(progress, end="")
+            now = int(time())
+            if now != last_output:
+                progress = "Working: {} in {} files with {} errors...{}\r".format(
+                    size_str(total_size),
+                    files_count,
+                    errors_count,
+                    spaces,
+                )
+                print(progress, end="")
+                last_output = now
 
     print()
     print("Files: {}".format(files_count))
     print("Skipped symlinks: {}".format(symlinks_count))
+    print("Skipped block devices, FIFOs, etc: {}".format(others_count))
     print("Errors: {}".format(errors_count))
