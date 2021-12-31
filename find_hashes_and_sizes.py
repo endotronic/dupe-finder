@@ -199,12 +199,11 @@ if __name__ == "__main__":
                                                 + fixed_path[len(fixed_path) - 27 :]
                                             )
 
-                                        progress = "Reading {} ({}%). Completed {} in {} files with {} errors...\r".format(
+                                        progress = "Reading {} ({}%). Completed {} in {} files...\r".format(
                                             display_filename,
                                             int(100 * size_read / size),
                                             size_str(total_size),
                                             files_count,
-                                            errors_count,
                                         )
                                         print(progress, end="")
 
@@ -229,10 +228,11 @@ if __name__ == "__main__":
 
                 now = int(time())
                 if now != last_output:
-                    progress = "Working: {} in {} files with {} errors...{}\r".format(
+                    progress = "Working: {} in {} files with {} errors and {} ignored files...{}\r".format(
                         size_str(total_size),
                         files_count,
                         errors_count,
+                        symlinks_count + others_count,
                         spaces,
                     )
                     print(progress, end="")
