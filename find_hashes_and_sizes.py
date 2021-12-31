@@ -79,8 +79,8 @@ if __name__ == "__main__":
 
                 parts = line.split("  ")
                 if len(parts) >= 3 and len(parts[0]) == 32:
-                    b64path = parts[2]
-                    known_hashes_dict[b64path] = parts[0]
+                    b64path = parts[2].strip()
+                    known_hashes_dict[b64path] = parts[0].strip()
 
     known_sizes_dict = dict()
     if os.path.exists(sizes_file):
@@ -94,8 +94,8 @@ if __name__ == "__main__":
                 parts = line.split("  ")
                 if len(parts) >= 3:
                     try:
-                        b64path = parts[2]
-                        known_sizes_dict[b64path] = int(parts[0])
+                        b64path = parts[2].strip()
+                        known_sizes_dict[b64path] = int(parts[0].strip())
                     except:
                         pass
 
@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
                     files_count += 1
                     fixed_path = path_bytes.decode("utf-8", errors="replace")
-                    b64path = base64.b64encode(path_bytes).decode("utf-8")
+                    b64path = base64.b64encode(path_bytes).decode("utf-8").strip()
 
                     try:
                         path_bytes.decode("utf-8", errors="strict")
