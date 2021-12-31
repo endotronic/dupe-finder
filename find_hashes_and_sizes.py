@@ -33,6 +33,12 @@ if __name__ == "__main__":
         help="rewrite output files instead of appending",
         action="store_true",
     )
+    parser.add_argument(
+        "-t",
+        "--trust-all-hashes",
+        help="skip checking file sizes and trust all known hashes",
+        action="store_true",
+    )
     args = parser.parse_args()
 
     dirname = os.path.basename(args.directory)
@@ -83,7 +89,7 @@ if __name__ == "__main__":
                     known_hashes_dict[b64path] = parts[0].strip()
 
     known_sizes_dict = dict()
-    if os.path.exists(sizes_file):
+    if os.path.exists(sizes_file) and not args.trust_all_hashes:
         print("Reading existing sizes file...")
         with open(sizes_file, "r", encoding="utf-8") as sizes_file_handle:
             while True:
@@ -142,7 +148,7 @@ if __name__ == "__main__":
                     try:
                         size = os.path.getsize(path_bytes)
                         write_to_sizes_file = args.rewrite
-                        hash_needs_refresh = True
+                        hash_needs_refresh = not args.trust_all_hashes
                         if b64path in known_sizes_dict:
                             if known_sizes_dict[b64path] == size:
                                 hash_needs_refresh = False
