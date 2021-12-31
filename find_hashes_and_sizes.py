@@ -69,8 +69,16 @@ if __name__ == "__main__":
     hashes_file = os.path.abspath(hashes_file)
     sizes_file = os.path.abspath(sizes_file)
     print("Producing:")
-    print(hashes_file)
-    print(sizes_file)
+    if args.rewrite:
+        print(hashes_file + " (rewriting)")
+    else:
+        print(hashes_file)
+    if args.trust_all_hashes:
+        print(sizes_file + " (ignoring)")
+    elif args.rewrite:
+        print(sizes_file + " (rewriting)")
+    else:
+        print(sizes_file)
 
     spaces = "".join([" " for _ in range(48)])
 
