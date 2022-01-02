@@ -1,23 +1,6 @@
 import argparse
 import base64
-import hashlib
-import os
-import stat
 from typing import Set
-
-from hurry.filesize import size as size_str
-
-CHUNK_SIZE = 1024 * 1024 * 32  # 32MB
-
-
-def convert_size(size_bytes):
-    if size_bytes == 0:
-        return "0B"
-    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-    i = int(math.floor(math.log(size_bytes, 1024)))
-    p = math.pow(1024, i)
-    s = round(size_bytes / p, 2)
-    return "%s %s" % (s, size_name[i])
 
 
 if __name__ == "__main__":
@@ -28,6 +11,11 @@ if __name__ == "__main__":
         "reference_hashes_file", help="reference directory hashes file path"
     )
     parser.add_argument("test_hashes_file", help="test directory hashes file path")
+    parser.add_argument(
+        "-r",
+        "--relaxed",
+        help="skip any input lines with bad formatting instead of failing",
+    )
     args = parser.parse_args()
 
     reference_hashes = set()  # type: Set[str]
@@ -44,11 +32,13 @@ if __name__ == "__main__":
             if len(parts) >= 3 and len(parts[0]) == 32:
                 reference_hashes.add(parts[0])
             else:
-                print(
-                    "Problem on {} line {} ({})".format(
-                        args.reference_hashes_file, line_no, line
-                    )
+                message = "Problem on {} line {} ({})".format(
+                    args.reference_hashes_file, line_no, line
                 )
+                if args.relaxed:
+                    print(message)
+                else:
+                    raise Exception(message)
 
     print(
         "Reference file has {} lines and {} unique hashes".format(
@@ -71,11 +61,13 @@ if __name__ == "__main__":
                 if parts[0] in reference_hashes:
                     reference_hashes.remove(parts[0])
             else:
-                print(
-                    "Problem on {} line {} ({})".format(
-                        args.test_hashes_file, line_no, line
-                    )
+                message = "Problem on {} line {} ({})".format(
+                    args.reference_hashes_file, line_no, line
                 )
+                if args.relaxed:
+                    print(message)
+                else:
+                    raise Exception(message)
 
     if len(reference_hashes) == 0:
         print("No files are missing")
