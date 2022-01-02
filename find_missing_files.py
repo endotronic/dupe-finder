@@ -12,9 +12,15 @@ if __name__ == "__main__":
     )
     parser.add_argument("test_hashes_file", help="test directory hashes file path")
     parser.add_argument(
+        "-o",
+        "--output",
+        help="output file path (optional)",
+    )
+    parser.add_argument(
         "-r",
         "--relaxed",
         help="skip any input lines with bad formatting instead of failing",
+        action="store_true",
     )
     args = parser.parse_args()
 
@@ -69,26 +75,37 @@ if __name__ == "__main__":
                 else:
                     raise Exception(message)
 
-    if len(reference_hashes) == 0:
-        print("No files are missing")
-    else:
-        print("{} unique files are missing:".format(len(reference_hashes)))
+    output_file = None
+    if args.output:
+        output_file = open(args.output, "w")
+    try:
+        if len(reference_hashes) == 0:
+            print("No files are missing")
+        else:
+            print("{} unique files are missing:".format(len(reference_hashes)))
 
-        with open(
-            args.reference_hashes_file, "r", encoding="utf-8"
-        ) as hashes_file_handle:
-            while True:
-                line = hashes_file_handle.readline()
-                if not line:
-                    break
+            with open(
+                args.reference_hashes_file, "r", encoding="utf-8"
+            ) as hashes_file_handle:
+                while True:
+                    line = hashes_file_handle.readline()
+                    if not line:
+                        break
 
-                line_no += 1
-                parts = line.split("  ")
-                if parts[0] in reference_hashes:
-                    missing_file = base64.b64decode(parts[2])
-                    try:
-                        print(missing_file.decode("utf-8"))
-                    except:
-                        print(
-                            "(approx) " + missing_file.decode("utf-8", errors="ignore")
-                        )
+                    line_no += 1
+                    parts = line.split("  ")
+                    if parts[0] in reference_hashes:
+                        if output_file:
+                            output_file.write(parts[2].strip() + "\n")
+
+                        missing_file = base64.b64decode(parts[2])
+                        try:
+                            print(missing_file.decode("utf-8"))
+                        except:
+                            print(
+                                "(approx) "
+                                + missing_file.decode("utf-8", errors="ignore")
+                            )
+    finally:
+        if output_file:
+            output_file.close()
