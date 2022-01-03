@@ -80,7 +80,8 @@ if __name__ == "__main__":
                     print()
                 else:
                     print("Copying {}...".format(rel.decode("utf-8", "ignore")))
-                    makedirs(needed_paths[0], exist_ok=False)
+                    if needed_paths:
+                        makedirs(needed_paths[0], exist_ok=False)
                     copy2(missing_file_path, dest)  # type: ignore
             except Exception as e:
                 print("problem on line {}: {}".format(line_no, e))
