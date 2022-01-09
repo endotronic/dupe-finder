@@ -22,29 +22,67 @@ if __name__ == "__main__":
         help="skip any input lines with bad formatting instead of failing",
         action="store_true",
     )
+    parser.add_argument(
+        "-s",
+        "--silent-errors",
+        help="don't report problems on stdout",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--v1",
+        help="v1: file contents contain two columns",
+        action="store_true",
+    )
     args = parser.parse_args()
 
     reference_hashes = set()  # type: Set[str]
-    print("Reading reference file...")
-    with open(args.reference_hashes_file, "r", encoding="utf-8") as hashes_file_handle:
-        line_no = 0
-        while True:
-            line = hashes_file_handle.readline()
-            if not line:
-                break
+    if not args.v1:
+        print("Reading reference file...")
+        with open(
+            args.reference_hashes_file, "r", encoding="utf-8"
+        ) as hashes_file_handle:
+            line_no = 0
+            while True:
+                line = hashes_file_handle.readline()
+                if not line:
+                    break
 
-            line_no += 1
-            parts = line.split("  ")
-            if len(parts) >= 3 and len(parts[0]) == 32:
-                reference_hashes.add(parts[0])
-            else:
-                message = "Problem on {} line {} ({})".format(
-                    args.reference_hashes_file, line_no, line
-                )
-                if args.relaxed:
-                    print(message)
+                line_no += 1
+                parts = line.split("  ")
+                if len(parts) >= 3 and len(parts[0]) == 32:
+                    reference_hashes.add(parts[0])
                 else:
-                    raise Exception(message)
+                    message = "Problem on {} line {} ({})".format(
+                        args.reference_hashes_file, line_no, line
+                    )
+                    if args.relaxed:
+                        if not args.silent_errors:
+                            print(message)
+                    else:
+                        raise Exception(message)
+    else:
+        print("Reading reference file (v1 format)...")
+        # TODO: maybe read as binary and do the best possible thing here
+        with open(args.reference_hashes_file, "r") as hashes_file_handle:
+            line_no = 0
+            while True:
+                line = hashes_file_handle.readline()
+                if not line:
+                    break
+
+                line_no += 1
+                parts = line.split("  ", 1)
+                if len(parts) == 2 and len(parts[0]) == 32:
+                    reference_hashes.add(parts[0])
+                else:
+                    message = "Problem on {} line {} ({})".format(
+                        args.reference_hashes_file, line_no, line
+                    )
+                    if args.relaxed:
+                        if not args.silent_errors:
+                            print(message)
+                    else:
+                        raise Exception(message)
 
     print(
         "Reference file has {} lines and {} unique hashes".format(
