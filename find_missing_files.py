@@ -22,6 +22,11 @@ if __name__ == "__main__":
         help="file path to output errors (optional, v1 only)",
     )
     parser.add_argument(
+        "-h",
+        "--hashes-file",
+        help="file path to output missing hashes (optional)",
+    )
+    parser.add_argument(
         "-r",
         "--relaxed",
         help="skip any input lines with bad formatting instead of failing",
@@ -156,6 +161,12 @@ if __name__ == "__main__":
                 else:
                     raise Exception(message)
 
+    if args.hashes_file:
+        print("Preserving hashes...")
+        with open(args.output, "w") as hashes_file:
+            for hash in reference_hashes:
+                hashes_file.write(hash + "\n")
+
     output_file = None
     if args.output:
         output_file = open(args.output, "w")
@@ -166,6 +177,7 @@ if __name__ == "__main__":
             print("{} unique files are missing:".format(len(reference_hashes)))
 
             if not args.v1:
+                print("Re-reading reference file...")
                 with open(
                     args.reference_hashes_file, "r", encoding="utf-8"
                 ) as hashes_file_handle:
