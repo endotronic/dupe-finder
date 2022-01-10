@@ -22,7 +22,7 @@ if __name__ == "__main__":
         help="file path to output errors (optional, v1 only)",
     )
     parser.add_argument(
-        "-h",
+        "-x",
         "--hashes-file",
         help="file path to output missing hashes (optional)",
     )
@@ -163,7 +163,7 @@ if __name__ == "__main__":
 
     if args.hashes_file:
         print("Preserving hashes...")
-        with open(args.output, "w") as hashes_file:
+        with open(args.hashes_file, "w") as hashes_file:
             for hash in reference_hashes:
                 hashes_file.write(hash + "\n")
 
