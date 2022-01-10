@@ -17,6 +17,11 @@ if __name__ == "__main__":
         help="output file path (optional)",
     )
     parser.add_argument(
+        "-e",
+        "--errors-file",
+        help="file path to output errors (optional, v1 only)",
+    )
+    parser.add_argument(
         "-r",
         "--relaxed",
         help="skip any input lines with bad formatting instead of failing",
@@ -66,48 +71,61 @@ if __name__ == "__main__":
                     else:
                         raise Exception(message)
     else:
-        print("Reading reference file (v1 format)...")
-        # TODO: maybe read as binary and do the best possible thing here
-        with open(args.reference_hashes_file, "rb") as hashes_file_handle:
-            line_no = 0
-            line = ""
-            while True:
-                line_bytes = hashes_file_handle.readline()
-                if not line_bytes:
-                    break
 
-                prev_line = line
-                try:
-                    line = line_bytes.decode("utf-8", errors="strict").strip()
-                except:
-                    line = line_bytes.decode("utf-8", errors="ignore").strip()
-                    message = "WARN: Failed to decode {} line {} (approx {})".format(
-                        args.reference_hashes_file, line_no, line
-                    )
-                    if not args.silent_warnings:
-                        print(message)
+        errors_file = None
+        if args.errors_file:
+            errors_file = open(args.errors_file, "w")
+        try:
+            print("Reading reference file (v1 format)...")
 
-                if line[0] == "\\":
-                    message = "WARN: Found {} line {} (approx {}) starts with slash. Ignoring slash.".format(
-                        args.reference_hashes_file, line_no, line
-                    )
-                    if not args.silent_warnings:
-                        print(message)
-                    line = line[1:]
+            with open(args.reference_hashes_file, "rb") as hashes_file_handle:
+                line_no = 0
+                line = ""
+                while True:
+                    line_bytes = hashes_file_handle.readline()
+                    if not line_bytes:
+                        break
 
-                line_no += 1
-                parts = line.split("  ", 1)
-                if len(parts) == 2 and len(parts[0]) == 32:
-                    reference_hashes.add(parts[0])
-                else:
-                    message = "ERR: Problem on {} line {} ({})".format(
-                        args.reference_hashes_file, line_no, line
-                    )
-                    if args.relaxed:
-                        if not args.silent_errors:
+                    prev_line = line
+                    try:
+                        line = line_bytes.decode("utf-8", errors="strict").strip()
+                    except:
+                        line = line_bytes.decode("utf-8", errors="ignore").strip()
+                        message = (
+                            "WARN: Failed to decode {} line {} (approx {})".format(
+                                args.reference_hashes_file, line_no, line
+                            )
+                        )
+                        if not args.silent_warnings:
                             print(message)
+
+                    if line[0] == "\\":
+                        message = "WARN: Found {} line {} (approx {}) starts with slash. Ignoring slash.".format(
+                            args.reference_hashes_file, line_no, line
+                        )
+                        if not args.silent_warnings:
+                            print(message)
+                        line = line[1:]
+
+                    line_no += 1
+                    parts = line.split("  ", 1)
+                    if len(parts) == 2 and len(parts[0]) == 32:
+                        reference_hashes.add(parts[0])
                     else:
-                        raise Exception(message)
+                        message = "ERR: Problem on {} line {} ({})".format(
+                            args.reference_hashes_file, line_no, line
+                        )
+                        if args.relaxed:
+                            if not args.silent_errors:
+                                if errors_file:
+                                    errors_file.write(line + "\n")
+                                else:
+                                    print(message)
+                        else:
+                            raise Exception(message)
+        finally:
+            if errors_file:
+                errors_file.close()
 
     print(
         "Reference file has {} lines and {} unique hashes".format(
