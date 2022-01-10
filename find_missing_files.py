@@ -165,28 +165,57 @@ if __name__ == "__main__":
         else:
             print("{} unique files are missing:".format(len(reference_hashes)))
 
-            with open(
-                args.reference_hashes_file, "r", encoding="utf-8"
-            ) as hashes_file_handle:
-                while True:
-                    line = hashes_file_handle.readline()
-                    if not line:
-                        break
+            if not args.v1:
+                with open(
+                    args.reference_hashes_file, "r", encoding="utf-8"
+                ) as hashes_file_handle:
+                    while True:
+                        line = hashes_file_handle.readline()
+                        if not line:
+                            break
 
-                    line_no += 1
-                    parts = line.split("  ")
-                    if parts[0] in reference_hashes:
-                        if output_file:
-                            output_file.write(parts[2].strip() + "\n")
+                        line_no += 1
+                        parts = line.split("  ")
+                        if parts[0] in reference_hashes:
+                            if output_file:
+                                output_file.write(parts[2].strip() + "\n")
 
-                        missing_file = base64.b64decode(parts[2])
-                        try:
-                            print(missing_file.decode("utf-8"))
-                        except:
-                            print(
-                                "(approx) "
-                                + missing_file.decode("utf-8", errors="ignore")
-                            )
+                            missing_file = base64.b64decode(parts[2])
+                            try:
+                                print(missing_file.decode("utf-8"))
+                            except:
+                                print(
+                                    "(approx) "
+                                    + missing_file.decode("utf-8", errors="ignore")
+                                )
+
+            else:
+                print("Re-reading reference file (v1 format)...")
+                with open(args.reference_hashes_file, "rb") as hashes_file_handle:
+                    line_no = 0
+                    line = ""
+                    while True:
+                        line_bytes = hashes_file_handle.readline()
+                        if not line_bytes:
+                            break
+
+                        line = line_bytes.decode("utf-8", errors="ignore").strip()
+                        if line[0] == "\\":
+                            line = line[1:]
+
+                        line_no += 1
+                        parts = line.split("  ", 1)
+                        if parts[0] in reference_hashes:
+                            missing_file = parts[1]
+                            if output_file:
+                                b64path = (
+                                    base64.b64encode(missing_file)
+                                    .decode("utf-8")
+                                    .strip()
+                                )
+                                output_file.write(parts[1].strip() + "\n")
+
+                            print(missing_file)
     finally:
         if output_file:
             output_file.close()
