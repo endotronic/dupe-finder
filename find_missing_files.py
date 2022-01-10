@@ -23,8 +23,13 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
-        "-s",
         "--silent-errors",
+        help="don't report problems on stdout",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-s",
+        "--silent-warnings",
         help="don't report problems on stdout",
         action="store_true",
     )
@@ -79,14 +84,14 @@ if __name__ == "__main__":
                     message = "WARN: Failed to decode {} line {} (approx {})".format(
                         args.reference_hashes_file, line_no, line
                     )
-                    if not args.silent_errors:
+                    if not args.silent_warnings:
                         print(message)
 
                 if line[0] == "\\":
                     message = "WARN: Found {} line {} (approx {}) starts with slash. Ignoring slash.".format(
                         args.reference_hashes_file, line_no, line
                     )
-                    if not args.silent_errors:
+                    if not args.silent_warnings:
                         print(message)
                     line = line[1:]
 
