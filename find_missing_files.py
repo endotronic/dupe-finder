@@ -63,19 +63,39 @@ if __name__ == "__main__":
     else:
         print("Reading reference file (v1 format)...")
         # TODO: maybe read as binary and do the best possible thing here
-        with open(args.reference_hashes_file, "r") as hashes_file_handle:
+        with open(args.reference_hashes_file, "rb") as hashes_file_handle:
             line_no = 0
+            line = ""
             while True:
-                line = hashes_file_handle.readline()
-                if not line:
+                line_bytes = hashes_file_handle.readline()
+                if not line_bytes:
                     break
+
+                prev_line = line
+                try:
+                    line = line_bytes.decode("utf-8", errors="strict").strip()
+                except:
+                    line = line_bytes.decode("utf-8", errors="ignore").strip()
+                    message = "WARN: Failed to decode {} line {} (approx {})".format(
+                        args.reference_hashes_file, line_no, line
+                    )
+                    if not args.silent_errors:
+                        print(message)
+
+                if line[0] == "\\":
+                    message = "WARN: Found {} line {} (approx {}) starts with slash. Ignoring slash.".format(
+                        args.reference_hashes_file, line_no, line
+                    )
+                    if not args.silent_errors:
+                        print(message)
+                    line = line[1:]
 
                 line_no += 1
                 parts = line.split("  ", 1)
                 if len(parts) == 2 and len(parts[0]) == 32:
                     reference_hashes.add(parts[0])
                 else:
-                    message = "Problem on {} line {} ({})".format(
+                    message = "ERR: Problem on {} line {} ({})".format(
                         args.reference_hashes_file, line_no, line
                     )
                     if args.relaxed:
