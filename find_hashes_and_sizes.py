@@ -5,7 +5,6 @@ import os
 import stat
 from time import time
 
-from hurry.filesize import size as size_str
 
 CHUNK_SIZE = 1024 * 1024 * 32  # 32MB
 
@@ -171,7 +170,7 @@ class DiskReader:
                                             progress = "Reading {} ({}%). Completed {} in {} files...\r".format(
                                                 display_filename,
                                                 int(100 * size_read / size),
-                                                size_str(self.total_size),
+                                                convert_size(self.total_size),
                                                 self.files_count,
                                             )
                                             print(progress, end="")
@@ -198,7 +197,7 @@ class DiskReader:
                     now = int(time())
                     if now != last_output:
                         progress = "Working: {} in {} files with {} errors and {} ignored files...{}\r".format(
-                            size_str(self.total_size),
+                            convert_size(self.total_size),
                             self.files_count,
                             self.errors_count,
                             self.symlinks_count + self.others_count,
