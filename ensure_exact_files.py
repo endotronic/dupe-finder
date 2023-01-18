@@ -55,8 +55,14 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    reference_path = get_common_path(args.reference_hashes_file)
-    test_path = get_common_path(args.test_hashes_file)
+    reference_path = bytes()
+    if not args.reference_path:
+        reference_path = get_common_path(args.reference_hashes_file)
+
+    test_path = bytes()
+    if not args.reference_path:
+        test_path = get_common_path(args.test_hashes_file)
+
     print(
         "Assuming reference path {!r} and test path {!r}".format(
             reference_path, test_path
@@ -64,11 +70,11 @@ if __name__ == "__main__":
     )
 
     if args.reference_path:
-        reference_path = bytes(args.reference_path)
+        reference_path = bytes(args.reference_path, encoding="utf-8")
         print("Reference path override: " + args.reference_path)
 
     if args.test_path:
-        test_path = bytes(args.test_path)
+        test_path = bytes(args.test_path, encoding="utf-8")
         print("Test path override: " + args.test_path)
 
     reference_files = dict()  # type: Dict[bytes, str]
@@ -84,6 +90,9 @@ if __name__ == "__main__":
             parts = line.split("  ")
             if len(parts) >= 3 and len(parts[0]) == 32:
                 path_bytes = base64.b64decode(parts[2])
+                if not path_bytes.startswith(reference_path):
+                    continue
+
                 relpath = path.relpath(path_bytes, start=reference_path)
                 reference_files[relpath] = parts[0]
             else:
@@ -110,8 +119,10 @@ if __name__ == "__main__":
             parts = line.split("  ")
             if len(parts) >= 3 and len(parts[0]) == 32:
                 path_bytes = base64.b64decode(parts[2])
-                relpath = path.relpath(path_bytes, start=test_path)
+                if not path_bytes.startswith(test_path):
+                    continue
 
+                relpath = path.relpath(path_bytes, start=test_path)
                 if relpath in reference_files:
                     if args.filenames_only:
                         del reference_files[relpath]
