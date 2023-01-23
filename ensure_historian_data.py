@@ -24,6 +24,24 @@ if __name__ == "__main__":
         "reference_hashes_file", help="reference directory hashes file path"
     )
     parser.add_argument("test_hashes_file", help="test directory hashes file path")
+    parser.add_argument(
+        "-s",
+        "--test-symlinks",
+        help="check for presence of posts and comments html in symlinks dir",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-d",
+        "--show-duplicate-ref-content",
+        help="indicate when duplicate reference content was found",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-h",
+        "--show_extraneous_html",
+        help="indicate when extraneous HTML found in reference",
+        action="store_true",
+    )
     args = parser.parse_args()
 
     reference_posts = dict()  # type: Dict[bytes, bytes]
@@ -67,7 +85,10 @@ if __name__ == "__main__":
                             )
                             reference_content[parts[0].encode("utf-8")] = path_bytes
                             reference_content[content_hash] = path_bytes
-                        if content_hash in reference_content:
+                        if (
+                            content_hash in reference_content
+                            and args.show_duplicate_ref_content
+                        ):
                             print("Content found twice: " + str(path_bytes))
                         reference_content[content_hash] = path_bytes
                 elif b"author config" in path_bytes:
@@ -91,7 +112,7 @@ if __name__ == "__main__":
                             elif b"old" in path_bytes or b"OLD" in path_bytes:
                                 # Old style
                                 reference_comments[fparts[0]] = path_bytes
-                            else:
+                            elif args.show_extraneous_html:
                                 print("Don't understand file " + str(path_bytes))
                     else:
                         reference_content[filename] = path_bytes
@@ -101,7 +122,7 @@ if __name__ == "__main__":
                         fparts = filename.split(b" ")
                         if len(fparts) > 1:
                             reference_posts[fparts[0]] = path_bytes
-                        elif b"old" in path_bytes:
+                        elif b"old" in path_bytes and args.show_extraneous_html:
                             print("Don't understand file " + str(path_bytes))
                         else:
                             raise Exception("Don't understand file " + str(path_bytes))
@@ -215,13 +236,14 @@ if __name__ == "__main__":
         )
     )
 
+    test_symlinks = args.test_symlinks
     print("Computing missing posts...")
     for ref_post, ref_path in reference_posts.items():
         if ref_post not in test_posts:
             str_post = ref_post.decode("utf-8")
             str_path = ref_path.decode("utf-8")
             print("Post {} from {} not in test directory".format(str_post, str_path))
-        if ref_post not in symlink_posts:
+        if test_symlinks and ref_post not in symlink_posts:
             str_post = ref_post.decode("utf-8")
             str_path = ref_path.decode("utf-8")
             print("Post {} from {} not in symlinks".format(str_post, str_path))
@@ -235,7 +257,7 @@ if __name__ == "__main__":
             print(
                 "Comment {} from {} not in test directory".format(str_comment, str_path)
             )
-        if ref_comment not in symlink_posts:
+        if test_symlinks and ref_comment not in symlink_posts:
             str_comment = ref_comment.decode("utf-8")
             str_path = ref_path.decode("utf-8")
             print("Comment {} from {} not in symlinks".format(str_comment, str_path))
@@ -247,7 +269,7 @@ if __name__ == "__main__":
             str_content_hash = ref_content_hash.decode("utf-8")
             str_path = ref_path.decode("utf-8")
             print(
-                "Post {} from {} not in test directory".format(
+                "Content {} from {} not in test directory".format(
                     str_content_hash, str_path
                 )
             )
