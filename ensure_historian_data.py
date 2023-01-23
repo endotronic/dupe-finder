@@ -59,7 +59,9 @@ if __name__ == "__main__":
             line_no += 1
             parts = line.split("  ")
             if len(parts) >= 3 and len(parts[0]) == 32:
+                file_hash = parts[0]
                 path_bytes = base64.b64decode(parts[2])
+
                 if path.basename(path_bytes) in EXCLUDED_FILES:
                     continue
                 elif b"post binaries" in path_bytes:
@@ -74,22 +76,28 @@ if __name__ == "__main__":
 
                     content_hash = path.basename(path.dirname(path_bytes))
                     if path.basename(path_bytes) != b"record.yaml":
-                        if content_hash.decode("utf-8") != parts[0]:
+                        if content_hash.decode("utf-8") != file_hash:
                             if path_bytes.endswith(b"Shortcut.lnk"):
                                 print("Skipping accidental shortcut " + str(path_bytes))
                                 continue
                             print(
                                 "Hash does not match {}: {}".format(
-                                    parts[0], str(path_bytes)
+                                    file_hash, str(path_bytes)
                                 )
                             )
-                            reference_content[parts[0].encode("utf-8")] = path_bytes
+                            reference_content[file_hash.encode("utf-8")] = path_bytes
                             reference_content[content_hash] = path_bytes
                         if (
                             content_hash in reference_content
                             and args.show_duplicate_ref_content
                         ):
-                            print("Content found twice: " + str(path_bytes))
+                            print(
+                                "Content found twice: {} found now at {} and previously at {}".format(
+                                    str(file_hash),
+                                    str(path_bytes),
+                                    str(reference_content[content_hash]),
+                                )
+                            )
                         reference_content[content_hash] = path_bytes
                 elif b"author config" in path_bytes:
                     author, ext = path.splitext(path.basename(path_bytes))
@@ -115,7 +123,7 @@ if __name__ == "__main__":
                             elif args.show_extraneous_html:
                                 print("Don't understand file " + str(path_bytes))
                     else:
-                        reference_content[filename] = path_bytes
+                        reference_content[file_hash.encode("utf-8")] = path_bytes
                 elif b"/posts/" in path_bytes or b"/subreddits/" in path_bytes:
                     filename, ext = path.splitext(path.basename(path_bytes))
                     if ext == b".html":
