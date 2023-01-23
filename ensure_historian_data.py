@@ -37,7 +37,7 @@ if __name__ == "__main__":
         action="store_true",
     )
     parser.add_argument(
-        "-h",
+        "-e",
         "--show_extraneous_html",
         help="indicate when extraneous HTML found in reference",
         action="store_true",
