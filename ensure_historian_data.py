@@ -122,8 +122,9 @@ if __name__ == "__main__":
                         fparts = filename.split(b" ")
                         if len(fparts) > 1:
                             reference_posts[fparts[0]] = path_bytes
-                        elif b"old" in path_bytes and args.show_extraneous_html:
-                            print("Don't understand file " + str(path_bytes))
+                        elif b"old" in path_bytes:
+                            if args.show_extraneous_html:
+                                print("Don't understand file " + str(path_bytes))
                         else:
                             raise Exception("Don't understand file " + str(path_bytes))
                     else:
